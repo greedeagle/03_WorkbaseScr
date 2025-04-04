@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 import os
 
 class PageData:
-    def __init__(self, url, title, hash):
+    def __init__(self, url, title, article,hash):
         self.url = url
         self.title = title
+        self.article = article
         self.hash = hash
 
     def __str__(self):
@@ -34,6 +35,7 @@ def UpdateDB(pageDatas):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
                 url TEXT UNIQUE,
+                article TEXT,
                 hash TEXT
             )
         ''')
@@ -44,10 +46,10 @@ def UpdateDB(pageDatas):
 
             if existing_data is None:
                 cursor.execute('''
-                    INSERT INTO qiita_db (url, title, hash) VALUES (?, ?, ?)
-                ''', (insertData.url, insertData.title, insertData.hash))
+                    INSERT INTO qiita_db (url, title, article, hash) VALUES (?, ?,?, ?)
+                ''', (insertData.url, insertData.title,insertData.article insertData.hash))
             elif insertData.hash != existing_data[0]:
-                cursor.execute("UPDATE qiita_db SET title=?, hash=? WHERE url=?", (insertData.title, insertData.hash, insertData.url))
+                cursor.execute("UPDATE qiita_db SET title=?, article=?, hash=? WHERE url=?", (insertData.title, insertData.article, insertData.hash, insertData.url))
                 updated = True
                 updated_pages.append(insertData)
 
