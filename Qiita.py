@@ -21,7 +21,56 @@ def generate_md5(text):
     m = hashlib.md5()
     m.update(text.encode('utf-8'))
     return m.hexdigest()
+
+
+def getArticleInfoFromDB():
+# DBのURLを使用してQiitaよりページ情報を取得する
+    
+    updated_pages = []
+    session = requests.Session()
+    response = session.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    conn = sqlite3.connect('my_database.db')
+    cursor = conn.cursor()
+
+    # DBが存在しないなら追加
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS qiita_db (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            url TEXT UNIQUE,
+            article TEXT,
+            hash TEXT
+        )
+    ''')
+
+    # すべてのURLを取得しておく
+    cursor.execute("SELECT url, title FROM qiita_db ", ())
+    existing_data = cursor.fetchall()
+
+    ret = []
+    for item in existing_data:
+        title = item[1]
+        targetURL = item[0]
+        print(title)
+        print(f"targetURL: {targetURL}") # 追加
+
+        try:
+            response = session.get(targetURL)
+            response.raise_for_status()
+            target_soup = BeautifulSoup(response.content, 'html.parser')
+            article = target_soup.select('article section')
+            # ページ内のすべてのテキストを取得
+            page_text = article[0].get_text(separator='\n', strip=True)
+            hash = generate_md5(page_text)
+            pageData = PageData(targetURL, title,page_text,  hash)
+            ret.append(pageData)
+        except requests.exceptions.RequestException as e:
+            print(f"記事ページの取得に失敗しました ({targetURL}): {e}")
+    return ret
 def getArticleInfo(url, login_url, username, password):
+# Qiitaよりページ情報を取得する
     session = requests.Session()
 
     login_page = session.get(login_url)
@@ -41,7 +90,7 @@ def getArticleInfo(url, login_url, username, password):
     soup = BeautifulSoup(response.content, 'html.parser')
 
     article = soup.find_all('article')
-    ret = []
+    ret =list() 
     for item in article:
         title_tag = item.select_one('h2 a')
 
@@ -72,6 +121,7 @@ def getArticleInfo(url, login_url, username, password):
 
 
 def checkUpdate(currentPageDatas):
+    # ページ情報より、DBを更新する
     try:
         updated_pages = []
         updated = False
@@ -139,6 +189,7 @@ login_url = 'https://qiita.com/login'
 
 # 表示されている記事の情報を取得
 currentPageDatas = getArticleInfo(url, login_url, username, password)
+currentPageDatas += getArticleInfoFromDB()
 # DBの情報と比較
 updatePages = checkUpdate(currentPageDatas)
 
