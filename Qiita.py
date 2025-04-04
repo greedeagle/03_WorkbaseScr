@@ -5,6 +5,7 @@ import sqlite3
 import webbrowser
 from dotenv import load_dotenv
 import os
+import difflib
 
 class PageData:
     def __init__(self, url, title, article,hash):
@@ -54,7 +55,7 @@ def getArticleInfo(url, login_url, username, password):
                 response = session.get(targetURL)
                 response.raise_for_status()
                 target_soup = BeautifulSoup(response.content, 'html.parser')
-                article = target_soup.find_all('article')
+                article = target_soup.select('article section')
                 # ページ内のすべてのテキストを取得
                 page_text = article[0].get_text(separator='\n', strip=True)
                 hash = generate_md5(page_text)
@@ -101,11 +102,18 @@ def checkUpdate(currentPageDatas):
                 ''', (insertData.url, insertData.title,insertData.article ,insertData.hash))
                 # 追加したものは、更新情報に追加する
                 updated_pages.append(insertData)
+                print(f"new record {insertData.title} - {insertData.url}")
 
             elif insertData.article != existing_data[1]:
                 cursor.execute("UPDATE qiita_db SET title=?, article=?, hash=? WHERE url=?", (insertData.title, insertData.article, insertData.hash, insertData.url))
                 updated = True
                 updated_pages.append(insertData)
+                print(f"record updated {insertData.title}")
+                # 差分を作り出す
+                diff = difflib.unified_diff(insertData.article, existing_data[1], fromfile="before" , tofile="after")
+                # 差分を出力
+                for line in diff:
+                    print(line, end="")
 
         conn.commit()
         print("データが正常に保存されました。")
@@ -134,10 +142,12 @@ currentPageDatas = getArticleInfo(url, login_url, username, password)
 # DBの情報と比較
 updatePages = checkUpdate(currentPageDatas)
 
-if updatePages is not []:
+if len(updatePages)> 0:
     print("-------更新されたページは以下の通りです---------")
     for item in updatePages:
         print(f"{item.title} {item.url}")
         webbrowser.open(item.url)
+else:
+    print("-----------更新情報はありません------------------")
 
     
