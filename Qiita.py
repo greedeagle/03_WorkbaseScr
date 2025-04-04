@@ -177,6 +177,14 @@ def checkUpdate(currentPageDatas):
 
     return updated_pages
 
+def remove_duplicate_urls(page_data_list):
+    seen_urls = set()
+    unique_pages = []
+    for page in page_data_list:
+        if page.url not in seen_urls:
+            seen_urls.add(page.url)
+            unique_pages.append(page)
+    return unique_pages
 
 
 # .env ファイルをロード
@@ -190,6 +198,7 @@ login_url = 'https://qiita.com/login'
 # 表示されている記事の情報を取得
 currentPageDatas = getArticleInfo(url, login_url, username, password)
 currentPageDatas += getArticleInfoFromDB()
+currentPageDatas = remove_duplicate_urls(currentPageDatas)
 # DBの情報と比較
 updatePages = checkUpdate(currentPageDatas)
 
