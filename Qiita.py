@@ -20,52 +20,7 @@ def generate_md5(text):
     m = hashlib.md5()
     m.update(text.encode('utf-8'))
     return m.hexdigest()
-
-def UpdateDB(pageDatas):
-    try:
-        updated_pages = []
-        updated = False
-        conn = None
-
-        conn = sqlite3.connect('my_database.db')
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS qiita_db (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT,
-                url TEXT UNIQUE,
-                article TEXT,
-                hash TEXT
-            )
-        ''')
-
-        for insertData in pageDatas:
-            cursor.execute("SELECT hash FROM qiita_db WHERE url=?", (insertData.url,))
-            existing_data = cursor.fetchone()
-
-            if existing_data is None:
-                cursor.execute('''
-                    INSERT INTO qiita_db (url, title, article, hash) VALUES (?, ?,?, ?)
-                ''', (insertData.url, insertData.title,insertData.article insertData.hash))
-            elif insertData.hash != existing_data[0]:
-                cursor.execute("UPDATE qiita_db SET title=?, article=?, hash=? WHERE url=?", (insertData.title, insertData.article, insertData.hash, insertData.url))
-                updated = True
-                updated_pages.append(insertData)
-
-        conn.commit()
-        print("データが正常に保存されました。")
-
-    except sqlite3.Error as e:
-        print(f"データベースエラーが発生しました: {e}")
-
-    finally:
-        if conn:
-            conn.close()
-
-    return updated_pages
-
-def login_and_get_elements(url, login_url, username, password):
+def getArticleInfo(url, login_url, username, password):
     session = requests.Session()
 
     login_page = session.get(login_url)
@@ -103,7 +58,7 @@ def login_and_get_elements(url, login_url, username, password):
                 # ページ内のすべてのテキストを取得
                 page_text = article[0].get_text(separator='\n', strip=True)
                 hash = generate_md5(page_text)
-                pageData = PageData(targetURL, title, hash)
+                pageData = PageData(targetURL, title,page_text,  hash)
                 ret.append(pageData)
             except requests.exceptions.RequestException as e:
                 print(f"記事ページの取得に失敗しました ({targetURL}): {e}")
@@ -114,6 +69,58 @@ def login_and_get_elements(url, login_url, username, password):
     return ret
 
 
+
+def checkUpdate(currentPageDatas):
+    try:
+        updated_pages = []
+        updated = False
+        conn = None
+
+        conn = sqlite3.connect('my_database.db')
+        cursor = conn.cursor()
+
+        # DBが存在しないなら追加
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS qiita_db (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                url TEXT UNIQUE,
+                article TEXT,
+                hash TEXT
+            )
+        ''')
+
+        for insertData in currentPageDatas:
+            cursor.execute("SELECT hash, article FROM qiita_db WHERE url=?", (insertData.url,))
+            existing_data = cursor.fetchone()
+
+            # 存在しないなら追加
+            if existing_data is None:
+                cursor.execute('''
+                    INSERT INTO qiita_db (url, title, article, hash) VALUES (?, ?,?, ?)
+                ''', (insertData.url, insertData.title,insertData.article ,insertData.hash))
+                # 追加したものは、更新情報に追加する
+                updated_pages.append(insertData)
+
+            elif insertData.article != existing_data[1]:
+                cursor.execute("UPDATE qiita_db SET title=?, article=?, hash=? WHERE url=?", (insertData.title, insertData.article, insertData.hash, insertData.url))
+                updated = True
+                updated_pages.append(insertData)
+
+        conn.commit()
+        print("データが正常に保存されました。")
+
+    except sqlite3.Error as e:
+        print(f"データベースエラーが発生しました: {e}")
+
+    finally:
+        if conn:
+            conn.close()
+
+    return updated_pages
+
+
+
 # .env ファイルをロード
 load_dotenv()
 username = os.getenv("QIITA_USER")
@@ -122,8 +129,10 @@ password = os.getenv("QIITA_PASS")
 url = 'https://qiita.com/'
 login_url = 'https://qiita.com/login'
 
-pageDatas = login_and_get_elements(url, login_url, username, password)
-updatePages = UpdateDB(pageDatas)
+# 表示されている記事の情報を取得
+currentPageDatas = getArticleInfo(url, login_url, username, password)
+# DBの情報と比較
+updatePages = checkUpdate(currentPageDatas)
 
 if updatePages is not []:
     print("-------更新されたページは以下の通りです---------")
